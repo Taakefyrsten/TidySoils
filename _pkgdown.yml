@@ -1,0 +1,36 @@
+url: https://taakefyrsten.github.io/TidySoils
+
+template:
+  bootstrap: 5
+  bootswatch: flatly
+
+home:
+  title: "TidySoils — Tidy tools for soil science"
+  description: >
+    The TidySoils ecosystem: pipe-compatible, tibble-in/tibble-out soil
+    texture classification and soil water retention modelling for R.
+
+navbar:
+  structure:
+    left:  [home, packages, news]
+    right: [github]
+  components:
+    home:
+      text: "Home"
+      href: index.html
+    packages:
+      text: "Packages"
+      menu:
+        - text: "tidysoiltexture"
+          href: https://taakefyrsten.github.io/tidysoiltexture
+        - text: "tidysoilwater"
+          href: https://taakefyrsten.github.io/tidysoilwater
+    github:
+      icon: fab fa-github
+      href: https://github.com/Taakefyrsten/TidySoils
+      aria-label: GitHub
+
+news:
+  releases:
+    - text: "TidySoils 1.0.0"
+      href: news/index.html

@@ -1,0 +1,25 @@
+Package: TidySoils
+Type: Package
+Title: Tidy Tools for Soil Science
+Version: 1.0.0
+Authors@R:
+    person("Einar", "Taakefyrsten", , "einaremil1999@gmail.com",
+           role = c("aut", "cre"),
+           comment = c(ORCID = ""))
+Description: A meta-package that installs and attaches the TidySoils
+    ecosystem: tidysoiltexture for USDA texture classification and
+    ggplot2-based texture triangle plots, and tidysoilwater for Van
+    Genuchten soil water retention and unsaturated hydraulic conductivity
+    modelling. All packages are pipe-compatible, accept and return tibbles,
+    and use tidy evaluation for column arguments.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1.0),
+    tidysoiltexture (>= 1.0.0),
+    tidysoilwater (>= 1.0.0)
+URL: https://taakefyrsten.github.io/TidySoils,
+    https://github.com/Taakefyrsten/TidySoils
+BugReports: https://github.com/Taakefyrsten/TidySoils/issues

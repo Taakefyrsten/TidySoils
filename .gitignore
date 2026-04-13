@@ -1,0 +1,14 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.positai
+# Sub-packages are separate git repos
+tidysoiltexture/
+tidysoilwater/
+# Development artefacts
+conversation-export.md
+tidysoiltexture-grid-tests.html
+tidysoiltexture-grid-tests_files/
+tidysoilwater-grid-tests.html
+tidysoilwater-grid-tests_files/

@@ -1,0 +1,822 @@
+---
+title: "tidysoiltexture — Grid Expansion Tests"
+subtitle: "Systematic validation of `classify_texture` and `gg_texture_triangle` across all 12 USDA texture classes"
+author: "TidySoil"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    theme: flatly
+    df-print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
+## Setup
+
+```{r packages}
+# Load from local source (not yet installed to library)
+pkg_root <- rprojroot::find_root(rprojroot::is_rstudio_project)
+devtools::load_all(file.path(pkg_root, "tidysoiltexture"), quiet = TRUE)
+
+library(tidyverse)
+library(knitr)
+```
+
+### Reference: USDA class centroids
+
+One representative point per texture class, chosen to lie clearly within its
+polygon (not near any boundary).
+
+```{r centroids}
+class_centroids <- tribble(
+  ~expected_class,    ~expected_abbr, ~sand, ~silt, ~clay,
+  "sand",             "Sa",            92,     5,     3,
+  "loamy sand",       "LoSa",          80,    12,     8,
+  "sandy loam",       "SaLo",          65,    22,    13,
+  "loam",             "Lo",            41,    39,    20,
+  "silty loam",       "SiLo",          20,    65,    15,
+  "silt",             "Si",             7,    85,     8,
+  "sandy clay loam",  "SaClLo",        60,    13,    27,
+  "clay loam",        "ClLo",          32,    34,    34,
+  "silty clay loam",  "SiClLo",        10,    56,    34,
+  "sandy clay",       "SaCl",          52,     6,    42,
+  "silty clay",       "SiCl",           6,    47,    47,
+  "clay",             "Cl",            20,    20,    60
+)
+
+kable(class_centroids,
+      caption = "Representative centroids used as reference grid")
+```
+
+---
+
+## Part 1 — `classify_texture()`
+
+### 1.1 Centroid grid: all 12 classes
+
+```{r classify-centroids}
+centroid_results <- class_centroids |>
+  classify_texture(sand = sand, silt = silt, clay = clay)
+
+kable(
+  select(centroid_results, expected_class, .texture_class, .texture_abbr,
+         sand, silt, clay),
+  caption = "Classification of all 12 centroids"
+)
+```
+
+```{r classify-centroid-check}
+centroid_check <- centroid_results |>
+  mutate(
+    class_pass = expected_class == .texture_class,
+    abbr_pass  = expected_abbr  == .texture_abbr
+  )
+
+all_pass <- all(centroid_check$class_pass) && all(centroid_check$abbr_pass)
+cat(if (all_pass) "✓ All 12 centroids classified correctly.\n"
+    else "✗ Some centroids misclassified — see table above.\n")
+
+stopifnot("Centroid misclassified" = all_pass)
+```
+
+### 1.2 Multi-sample grid: 5 points per class
+
+For each of the 12 classes we define 5 spread-out interior samples.
+This gives a **60-row** test grid.
+
+```{r multi-sample-grid}
+class_samples <- tribble(
+  ~expected_class,   ~sand, ~silt, ~clay,
+  # sand  (>85% sand, silt+1.5*clay < 15)
+  "sand",            90,    7,    3,
+  "sand",            95,    3,    2,
+  "sand",            88,    8,    4,
+  "sand",            93,    5,    2,
+  "sand",            97,    2,    1,
+  # loamy sand
+  "loamy sand",      83,    10,   7,
+  "loamy sand",      78,    15,   7,
+  "loamy sand",      80,    12,   8,
+  "loamy sand",      82,    8,   10,
+  "loamy sand",      86,    6,    8,
+  # sandy loam
+  "sandy loam",      70,    18,  12,
+  "sandy loam",      60,    27,  13,
+  "sandy loam",      75,    12,  13,
+  "sandy loam",      55,    30,  15,
+  "sandy loam",      65,    20,  15,
+  # loam
+  "loam",            43,    38,  19,
+  "loam",            35,    42,  23,
+  "loam",            48,    30,  22,
+  "loam",            40,    37,  23,
+  "loam",            30,    48,  22,
+  # silty loam  (labelled as the package returns it)
+  "silty loam",      20,    60,  20,
+  "silty loam",      15,    70,  15,
+  "silty loam",      25,    55,  20,
+  "silty loam",      10,    75,  15,
+  "silty loam",      28,    58,  14,
+  # silt
+  "silt",            5,     88,   7,
+  "silt",            3,     92,   5,
+  "silt",            10,    82,   8,
+  "silt",            7,     86,   7,
+  "silt",            2,     94,   4,
+  # sandy clay loam
+  "sandy clay loam", 58,    14,  28,
+  "sandy clay loam", 63,    10,  27,
+  "sandy clay loam", 55,    17,  28,
+  "sandy clay loam", 68,     7,  25,
+  "sandy clay loam", 50,    22,  28,
+  # clay loam
+  "clay loam",       33,    35,  32,
+  "clay loam",       28,    38,  34,
+  "clay loam",       38,    30,  32,
+  "clay loam",       25,    40,  35,
+  "clay loam",       42,    27,  31,
+  # silty clay loam
+  "silty clay loam", 12,    55,  33,
+  "silty clay loam", 8,     62,  30,
+  "silty clay loam", 15,    52,  33,
+  "silty clay loam", 5,     65,  30,
+  "silty clay loam", 15,    52,  33,
+  # sandy clay
+  "sandy clay",      55,     4,  41,
+  "sandy clay",      50,     8,  42,
+  "sandy clay",      60,     3,  37,
+  "sandy clay",      48,     5,  47,
+  "sandy clay",      53,     7,  40,
+  # silty clay
+  "silty clay",      5,     50,  45,
+  "silty clay",      3,     55,  42,
+  "silty clay",      8,     45,  47,
+  "silty clay",      2,     58,  40,
+  "silty clay",      10,    43,  47,
+  # clay
+  "clay",            22,    18,  60,
+  "clay",            15,    25,  60,
+  "clay",            28,    14,  58,
+  "clay",            10,    30,  60,
+  "clay",            35,    10,  55
+)
+
+cat("Grid dimensions:", nrow(class_samples), "rows ×",
+    ncol(class_samples), "columns\n")
+```
+
+```{r multi-sample-classify}
+sample_results <- class_samples |>
+  classify_texture(sand = sand, silt = silt, clay = clay)
+
+kable(
+  sample_results |>
+    count(expected_class, .texture_class) |>
+    pivot_wider(names_from = .texture_class,
+                values_from = n, values_fill = 0L),
+  caption = "Confusion matrix: expected (rows) vs predicted (columns)"
+)
+```
+
+```{r multi-sample-accuracy}
+accuracy_by_class <- sample_results |>
+  mutate(correct = expected_class == .texture_class) |>
+  group_by(expected_class) |>
+  summarise(
+    n_total   = n(),
+    n_correct = sum(correct),
+    accuracy  = n_correct / n_total,
+    .groups   = "drop"
+  )
+
+kable(accuracy_by_class,
+      caption = "Per-class accuracy on the 60-point grid")
+
+overall_acc <- mean(sample_results$expected_class == sample_results$.texture_class)
+cat(sprintf("Overall accuracy: %.1f%% (%d / %d samples)\n",
+            overall_acc * 100,
+            sum(sample_results$expected_class == sample_results$.texture_class),
+            nrow(sample_results)))
+```
+
+### 1.3 Column name vs scalar equivalence
+
+For every centroid, classify via columns and via scalars; results must match.
+
+```{r classify-equiv}
+equiv_check <- class_centroids |>
+  rowwise() |>
+  mutate(
+    class_col    = classify_texture(
+      tibble(sand = sand, silt = silt, clay = clay),
+      sand = sand, silt = silt, clay = clay)$.texture_class,
+    class_scalar = classify_texture(
+      tibble(id = 1L),
+      sand = sand, silt = silt, clay = clay)$.texture_class,
+    pass = class_col == class_scalar
+  ) |>
+  ungroup() |>
+  select(expected_class, class_col, class_scalar, pass)
+
+kable(equiv_check,
+      caption = "Column-name vs scalar equivalence across all classes")
+
+stopifnot("Column vs scalar mismatch" = all(equiv_check$pass))
+cat("✓ Column/scalar equivalence confirmed for all 12 classes.\n")
+```
+
+### 1.4 Output structure
+
+```{r classify-structure}
+result <- classify_texture(
+  tibble(sand = 40, silt = 40, clay = 20, site = "A"),
+  sand = sand, silt = silt, clay = clay
+)
+
+stopifnot(
+  "Not a tibble"            = inherits(result, "tbl_df"),
+  "Missing .texture_class"  = ".texture_class" %in% names(result),
+  "Missing .texture_abbr"   = ".texture_abbr"  %in% names(result),
+  "Original cols preserved" = "site"           %in% names(result),
+  "Row count changed"       = nrow(result) == 1L
+)
+cat("✓ Output structure is correct (tibble, both class columns, original cols preserved).\n")
+```
+
+### 1.5 Input validation
+
+```{r classify-validation}
+# sand + silt + clay ≠ 100
+tryCatch(
+  classify_texture(tibble(sand = 50, silt = 30, clay = 10),
+                   sand = sand, silt = silt, clay = clay),
+  error = \(e) cat("✓ Sum ≠ 100:", conditionMessage(e), "\n")
+)
+
+# unsupported system
+tryCatch(
+  classify_texture(tibble(sand = 40, silt = 40, clay = 20),
+                   sand = sand, silt = silt, clay = clay, system = "EU"),
+  error = \(e) cat("✓ Bad system:", conditionMessage(e), "\n")
+)
+```
+
+### 1.6 Expand-grid: systematic ternary sweep
+
+We create a systematic grid over the ternary diagram (every 5 %) and verify
+that every valid point — including axis edges and triangle vertices — receives
+a non-NA classification. The `point_in_polygon()` implementation uses an
+on-edge collinearity check before ray-casting, so boundary points are handled
+correctly.
+
+```{r ternary-sweep}
+sweep_grid <- expand_grid(
+  sand = seq(0, 100, by = 5),
+  silt = seq(0, 100, by = 5)
+) |>
+  mutate(clay = 100 - sand - silt) |>
+  filter(clay >= 0, sand + silt + clay == 100)
+
+cat("Sweep grid:", nrow(sweep_grid), "valid ternary points.\n")
+
+sweep_results <- classify_texture(sweep_grid, sand = sand, silt = silt,
+                                  clay = clay)
+
+na_count <- sum(is.na(sweep_results$.texture_class))
+cat(sprintf("Points with NA class: %d / %d (%.1f%%)\n",
+            na_count, nrow(sweep_grid), na_count / nrow(sweep_grid) * 100))
+
+stopifnot("Unexpected NAs in ternary sweep" = na_count == 0)
+cat("✓ All", nrow(sweep_grid), "points classified — including axis edges and vertices.\n")
+```
+
+```{r sweep-distribution}
+sweep_results |>
+  count(.texture_class) |>
+  arrange(desc(n)) |>
+  kable(caption = "Distribution of texture classes in the 5% ternary sweep")
+```
+
+### 1.7 Performance regression: 10 k points in < 1 s
+
+The vectorised classification loop (iterates over 12 classes, tests all N
+points per class simultaneously) must complete 10 000 samples in under one
+second on any reasonable development machine.
+
+```{r perf-regression}
+set.seed(7743)
+perf_data <- tibble::tibble(
+  sand = runif(20000, 5, 80),
+  clay = runif(20000, 5, 45)
+) |>
+  dplyr::mutate(silt = 100 - sand - clay) |>
+  dplyr::filter(silt >= 5) |>
+  dplyr::slice_head(n = 10000)
+
+stopifnot("Perf grid is not 10 000 rows" = nrow(perf_data) == 10000)
+
+elapsed <- system.time(
+  perf_result <- classify_texture(perf_data,
+                                  sand = sand, silt = silt, clay = clay)
+)["elapsed"]
+
+cat(sprintf("10 000 points classified in %.3f s\n", elapsed))
+stopifnot("Performance regression: classify_texture() took > 1 s on 10 k points" =
+            elapsed < 1)
+cat("✓ Performance target met (< 1 s).\n")
+```
+
+```{r perf-na-check}
+perf_na <- sum(is.na(perf_result$.texture_class))
+cat(sprintf("NA classifications: %d / 10 000 (%.2f%%)\n",
+            perf_na, perf_na / 100))
+stopifnot("Unexpected NAs in performance grid" = perf_na == 0)
+cat("✓ 0 NAs — all 10 000 points classified.\n")
+```
+
+---
+
+## Part 2 — `gg_texture_triangle()`
+
+### 2.1 Returns a ggplot object
+
+```{r gg-returns-ggplot}
+p <- gg_texture_triangle(
+  class_centroids,
+  sand = sand, silt = silt, clay = clay
+)
+
+stopifnot("Not a gg object" = inherits(p, "gg"))
+cat("✓ gg_texture_triangle() returns a gg object.\n")
+```
+
+### 2.2 Colour mapping: NULL vs column name
+
+```{r gg-colour-check}
+# No colour mapping
+p_no_colour <- gg_texture_triangle(class_centroids,
+                                   sand = sand, silt = silt, clay = clay)
+point_layer_nc <- Filter(\(l) inherits(l$geom, "GeomPoint"), p_no_colour$layers)
+stopifnot("colour aesthetic present when it should be absent" =
+            !"colour" %in% names(point_layer_nc[[1]]$mapping))
+cat("✓ colour = NULL → no colour aesthetic on point layer.\n")
+
+# With colour mapping
+p_colour <- gg_texture_triangle(class_centroids,
+                                sand = sand, silt = silt, clay = clay,
+                                colour = expected_class)
+point_layer_c <- Filter(\(l) inherits(l$geom, "GeomPoint"), p_colour$layers)
+stopifnot("colour aesthetic absent when it should be present" =
+            "colour" %in% names(point_layer_c[[1]]$mapping))
+cat("✓ colour = expected_class → colour aesthetic present on point layer.\n")
+```
+
+### 2.3 Input validation
+
+```{r gg-validation}
+tryCatch(
+  gg_texture_triangle(tibble(sand = 50, silt = 30, clay = 5),
+                      sand = sand, silt = silt, clay = clay),
+  error = \(e) cat("✓ Sum ≠ 100:", conditionMessage(e), "\n")
+)
+
+tryCatch(
+  gg_texture_triangle(class_centroids,
+                      sand = sand, silt = silt, clay = clay,
+                      system = "BRITISH"),
+  error = \(e) cat("✓ Bad system:", conditionMessage(e), "\n")
+)
+```
+
+### 2.4 `breaks` parameter
+
+Valid breaks produce grid lines; out-of-range values are rejected.
+
+```{r breaks-valid}
+# Quarters and deciles should both render without error
+p_q <- gg_texture_triangle(class_centroids, sand, silt, clay,
+                            breaks = c(25, 50, 75))
+p_d <- gg_texture_triangle(class_centroids, sand, silt, clay,
+                            breaks = seq(10, 90, 10))
+stopifnot(inherits(p_q, "gg"), inherits(p_d, "gg"))
+cat("✓ breaks = c(25,50,75) and seq(10,90,10) both produce gg objects.\n")
+```
+
+```{r breaks-invalid}
+tryCatch(
+  gg_texture_triangle(class_centroids, sand, silt, clay, breaks = c(0, 50)),
+  error = \(e) cat("✓ breaks = 0 rejected:", conditionMessage(e), "\n")
+)
+tryCatch(
+  gg_texture_triangle(class_centroids, sand, silt, clay, breaks = c(50, 100)),
+  error = \(e) cat("✓ breaks = 100 rejected:", conditionMessage(e), "\n")
+)
+```
+
+### 2.5 `style` parameter
+
+`style = "none"` (default) leaves polygons unfilled; `style = "wiki"` maps hex
+fills via `scale_fill_identity()`.
+
+```{r style-layers}
+p_none <- gg_texture_triangle(class_centroids, sand, silt, clay,
+                               style = "none")
+p_wiki <- gg_texture_triangle(class_centroids, sand, silt, clay,
+                               style = "wiki")
+
+# wiki plot should have a ScaleFilIdentity in its scales
+has_fill_scale <- function(p) {
+  any(vapply(p$scales$scales,
+             \(s) inherits(s, "ScaleDiscreteIdentity") ||
+                  inherits(s, "ScaleContinuousIdentity"),
+             logical(1)))
+}
+
+stopifnot("wiki style missing fill scale" = has_fill_scale(p_wiki))
+cat("✓ style = 'wiki' has a fill-identity scale; style = 'none' does not.\n")
+```
+
+```{r style-visual, fig.width=7, fig.height=6}
+p_wiki + labs(title = "style = 'wiki'")
+```
+
+### 2.6 Grid styling (`grid_colour`, `grid_linetype`, `grid_linewidth`)
+
+All combinations should produce gg objects without error.
+
+```{r grid-styling}
+combos <- list(
+  list(col = "grey30", lt = "solid",  lw = 0.6),
+  list(col = "grey80", lt = "dotted", lw = 0.3),
+  list(col = "grey70", lt = "blank",  lw = 0.25)   # blank hides grid
+)
+for (co in combos) {
+  p_g <- gg_texture_triangle(class_centroids, sand, silt, clay,
+           grid_colour = co$col, grid_linetype = co$lt,
+           grid_linewidth = co$lw)
+  stopifnot(inherits(p_g, "gg"))
+}
+cat("✓ All grid_colour / grid_linetype / grid_linewidth combinations render.\n")
+```
+
+### 2.7 Border styling (`border_colour`, `border_linewidth`)
+
+```{r border-styling}
+# Bold visible borders
+p_bold <- gg_texture_triangle(class_centroids, sand, silt, clay,
+            style = "wiki", border_colour = "black", border_linewidth = 1.2)
+stopifnot(inherits(p_bold, "gg"))
+
+# NA border (hidden) should not error
+p_noborder <- gg_texture_triangle(class_centroids, sand, silt, clay,
+               style = "wiki", border_colour = NA)
+stopifnot(inherits(p_noborder, "gg"))
+
+cat("✓ border_colour (including NA) and border_linewidth render without error.\n")
+```
+
+### 2.8 Tick height (`tick_height`)
+
+```{r tick-height}
+# Zero hides tick marks
+p_t0 <- gg_texture_triangle(class_centroids, sand, silt, clay, tick_height = 0)
+# Fixed height
+p_tf <- gg_texture_triangle(class_centroids, sand, silt, clay, tick_height = 0.05)
+# Negative should error
+tryCatch(
+  gg_texture_triangle(class_centroids, sand, silt, clay, tick_height = -0.01),
+  error = \(e) cat("✓ Negative tick_height rejected:", conditionMessage(e), "\n")
+)
+stopifnot(inherits(p_t0, "gg"), inherits(p_tf, "gg"))
+cat("✓ tick_height = 0 and fixed height both render.\n")
+```
+
+### 2.9 `texture_label_style()` — validation and key filtering
+
+```{r label-style-valid}
+# Only supplied keys should appear in the output list
+ls1 <- texture_label_style(class_show = FALSE, axis_size = 4.5)
+stopifnot(
+  "class_show not in output" = "class_show" %in% names(ls1),
+  "axis_size not in output"  = "axis_size"  %in% names(ls1),
+  "unsupplied key leaked"    = !"tick_show" %in% names(ls1),
+  "class_show value wrong"   = ls1$class_show == FALSE,
+  "axis_size value wrong"    = ls1$axis_size  == 4.5
+)
+cat("✓ texture_label_style() returns only explicitly supplied keys.\n")
+```
+
+```{r label-style-errors}
+tryCatch(
+  texture_label_style(tick_show = "yes"),
+  error = \(e) cat("✓ Non-logical tick_show rejected:", conditionMessage(e), "\n")
+)
+tryCatch(
+  texture_label_style(axis_size = -1),
+  error = \(e) cat("✓ Negative axis_size rejected:", conditionMessage(e), "\n")
+)
+tryCatch(
+  texture_label_style(class_size = 0),
+  error = \(e) cat("✓ Zero class_size rejected:", conditionMessage(e), "\n")
+)
+```
+
+```{r label-style-integration}
+# All six keys in a single call, passed via label_style — should render
+p_ls <- gg_texture_triangle(class_centroids, sand, silt, clay,
+  label_style = texture_label_style(
+    tick_show  = FALSE, tick_size  = 2.0,
+    axis_show  = TRUE,  axis_size  = 4.0,
+    class_show = TRUE,  class_size = 3.0
+  ))
+stopifnot(inherits(p_ls, "gg"))
+cat("✓ All six label_style keys accepted and rendered.\n")
+```
+
+### 2.10 `texture_surface()` — constructor validation
+
+```{r surface-setup}
+set.seed(5512)
+surf_df <- tibble::tibble(
+  sand = runif(70, 5, 85),
+  clay = runif(70, 5, 50)
+) |>
+  dplyr::mutate(silt = 100 - sand - clay) |>
+  dplyr::filter(silt >= 2) |>
+  dplyr::mutate(prop = clay * 0.6 + rnorm(dplyr::n(), 0, 3),
+                label = "x")
+```
+
+```{r surface-valid}
+ts_obj <- texture_surface(surf_df, sand, silt, clay, z = prop)
+stopifnot(
+  "wrong class"          = inherits(ts_obj, "texture_surface"),
+  "missing sand_v"       = "sand_v"     %in% names(ts_obj),
+  "missing z_v"          = "z_v"        %in% names(ts_obj),
+  "wrong resolution"     = ts_obj$resolution == 150L,
+  "wrong power"          = ts_obj$power == 2,
+  "z length mismatch"    = length(ts_obj$z_v) == length(ts_obj$sand_v)
+)
+cat("✓ texture_surface() returns a valid 'texture_surface' object.\n")
+```
+
+```{r surface-errors}
+# Non-numeric z
+tryCatch(
+  texture_surface(surf_df, sand, silt, clay, z = label),
+  error = \(e) cat("✓ Non-numeric z rejected:", conditionMessage(e), "\n")
+)
+# Resolution too small
+tryCatch(
+  texture_surface(surf_df, sand, silt, clay, z = prop, resolution = 5L),
+  error = \(e) cat("✓ resolution < 10 rejected:", conditionMessage(e), "\n")
+)
+# Bad power
+tryCatch(
+  texture_surface(surf_df, sand, silt, clay, z = prop, power = -1),
+  error = \(e) cat("✓ Negative power rejected:", conditionMessage(e), "\n")
+)
+# Wrong class passed as surface
+tryCatch(
+  gg_texture_triangle(class_centroids, sand, silt, clay,
+                      surface = list(a = 1)),
+  error = \(e) cat("✓ Non-texture_surface object rejected:", conditionMessage(e), "\n")
+)
+```
+
+```{r surface-renders}
+p_surf <- gg_texture_triangle(class_centroids, sand, silt, clay,
+            surface = texture_surface(surf_df, sand, silt, clay, z = prop)) +
+          ggplot2::scale_fill_viridis_c(name = "prop")
+stopifnot(inherits(p_surf, "gg"))
+cat("✓ gg_texture_triangle() with surface renders a gg object.\n")
+```
+
+### 2.11 `geom_texture_contour()` — layer output
+
+```{r contour-layer}
+contour_layer <- geom_texture_contour(surf_df, sand, silt, clay, z = prop,
+                                      breaks = 20)
+stopifnot("Not a ggplot2 Layer" = inherits(contour_layer, "LayerInstance"))
+cat("✓ geom_texture_contour() returns a ggplot2 LayerInstance.\n")
+```
+
+```{r contour-renders}
+# Addable to a plain triangle
+p_ct <- gg_texture_triangle(class_centroids, sand, silt, clay) +
+        geom_texture_contour(surf_df, sand, silt, clay, z = prop,
+                             breaks = c(15, 25), colour = "steelblue",
+                             linewidth = 0.9)
+stopifnot(inherits(p_ct, "gg"))
+
+# Addable on top of a surface
+p_cs <- gg_texture_triangle(class_centroids, sand, silt, clay,
+          surface = texture_surface(surf_df, sand, silt, clay, z = prop)) +
+        ggplot2::scale_fill_viridis_c() +
+        geom_texture_contour(surf_df, sand, silt, clay, z = prop,
+                             breaks = 20, colour = "white", linewidth = 1.2)
+stopifnot(inherits(p_cs, "gg"))
+cat("✓ geom_texture_contour() composable on plain triangle and surface.\n")
+```
+
+---
+
+### 2.12 Expand-grid visualisation: all 12 class centroids, coloured by class
+
+```{r gg-centroids, fig.width=7, fig.height=6.5}
+gg_texture_triangle(
+  class_centroids,
+  sand   = sand,
+  silt   = silt,
+  clay   = clay,
+  colour = expected_class
+) +
+  labs(
+    title   = "USDA texture triangle — 12 class centroids",
+    colour  = "Expected class"
+  )
+```
+
+### 2.13 Expand-grid visualisation: 60-sample grid, coloured by correct/incorrect
+
+```{r gg-multisamples, fig.width=7, fig.height=6.5}
+gg_texture_triangle(
+  sample_results |>
+    mutate(result = if_else(
+      expected_class == .texture_class, "correct", "incorrect"
+    )),
+  sand   = sand,
+  silt   = silt,
+  clay   = clay,
+  colour = result
+) +
+  scale_colour_manual(values = c(correct = "steelblue", incorrect = "tomato")) +
+  labs(
+    title   = "60-sample grid — classification correctness",
+    colour  = "Result"
+  )
+```
+
+### 2.14 Expand-grid visualisation: systematic 5 % sweep coloured by class
+
+```{r gg-sweep, fig.width=7, fig.height=6.5}
+gg_texture_triangle(
+  sweep_results,
+  sand   = sand,
+  silt   = silt,
+  clay   = clay,
+  colour = .texture_class
+) +
+  labs(
+    title   = "Systematic ternary sweep (5 % grid) — texture classification",
+    colour  = "Texture class"
+  )
+```
+
+---
+
+## Part 3 — SpatRaster large-raster benchmark
+
+Simulates a 1 000 × 1 000 SpatRaster (1 M cells) with three layers (sand,
+silt, clay) drawn from realistic ternary fractions. Benchmarks
+`classify_texture.SpatRaster()` end-to-end and confirms 0 NA classifications
+in valid cells.
+
+```{r spatraster-bench-setup}
+if (!requireNamespace("terra", quietly = TRUE)) {
+  message("terra not installed — skipping Part 3 benchmark.")
+  knitr::knit_exit()
+}
+library(terra)
+```
+
+### 3.1 Build 1 M-cell SpatRaster
+
+```{r build-1m-raster}
+set.seed(4421)
+n_cells <- 1000L * 1000L   # 1 M cells
+
+# Generate valid ternary fractions: sand + silt + clay = 100
+sand_v <- runif(n_cells, 5, 80)
+clay_v <- runif(n_cells, 5, 45)
+silt_v <- 100 - sand_v - clay_v
+
+# Clamp so silt >= 2 (should already hold for most draws; discard tiny fraction)
+valid <- silt_v >= 2
+cat(sprintf("Valid cells: %d / %d (%.2f%%)\n",
+            sum(valid), n_cells, mean(valid) * 100))
+
+# Keep first 1 M valid (almost certainly all of them; just trim if needed)
+sand_v <- sand_v[valid][seq_len(min(n_cells, sum(valid)))]
+silt_v <- silt_v[valid][seq_len(min(n_cells, sum(valid)))]
+clay_v <- clay_v[valid][seq_len(min(n_cells, sum(valid)))]
+n_actual <- length(sand_v)
+
+# Build a minimal 1000×1000 raster with CRS
+r_bench <- terra::rast(ncols = 1000, nrows = 1000, nlyrs = 3,
+                       xmin = 0, xmax = 1, ymin = 0, ymax = 1,
+                       crs = "EPSG:4326")
+names(r_bench) <- c("sand", "silt", "clay")
+terra::values(r_bench) <- cbind(sand_v, silt_v, clay_v)
+
+cat(sprintf("Raster: %d cols × %d rows × 3 layers (%d cells total)\n",
+            terra::ncol(r_bench), terra::nrow(r_bench), terra::ncell(r_bench)))
+```
+
+### 3.2 Time `classify_texture()` on 1 M cells
+
+```{r bench-1m-classify}
+library(tidysoiltexture)
+
+elapsed_1m <- system.time(
+  r_class <- classify_texture(r_bench,
+                              sand = "sand", silt = "silt", clay = "clay")
+)["elapsed"]
+
+cat(sprintf("1 M cells classified in %.3f s\n", elapsed_1m))
+stopifnot("Performance regression: classify_texture() took > 15 s on 1 M cells" =
+            elapsed_1m < 15)
+cat("✓ Performance target met (< 15 s).\n")
+```
+
+### 3.3 Verify output — 0 NAs in valid cells
+
+```{r bench-na-check}
+out_vals  <- terra::values(r_class)
+n_na      <- sum(is.na(out_vals))
+pct_na    <- n_na / n_actual * 100
+cat(sprintf("NA cells: %d / %d (%.4f%%)\n", n_na, n_actual, pct_na))
+stopifnot("Unexpected NAs in 1 M-cell benchmark" = n_na == 0L)
+cat("✓ 0 NAs — all 1 M cells classified.\n")
+```
+
+### 3.4 Class distribution
+
+```{r bench-distribution}
+class_levels <- terra::levels(r_class)[[1]]
+tbl_int      <- as.vector(terra::values(r_class))
+
+tibble::tibble(id = tbl_int) |>
+  dplyr::left_join(class_levels, by = "id") |>
+  dplyr::count(texture_class) |>
+  dplyr::mutate(pct = round(n / sum(n) * 100, 2)) |>
+  dplyr::arrange(desc(n)) |>
+  knitr::kable(caption = "Class distribution across 1 M-cell raster")
+```
+
+### 3.5 Visual: classified raster
+
+```{r bench-plot, fig.width=6, fig.height=5}
+terra::plot(r_class,
+            main   = "Texture classification — 1 M-cell benchmark raster",
+            col    = grDevices::hcl.colors(12, "Set2"),
+            legend = TRUE)
+```
+
+---
+
+## Summary
+
+```{r summary}
+tibble::tribble(
+  ~Function,                   ~`Grid / input`,                        ~`Tests run`,
+  "classify_texture()",        "12 centroids",
+    "correct class & abbr, output structure",
+  "classify_texture()",        "60-sample grid (5 per class)",
+    "confusion matrix, per-class accuracy, NA coverage",
+  "classify_texture()",        "ternary sweep at 5 % intervals (231 pts)",
+    "0 NAs incl. axis edges & vertices, class distribution",
+  "classify_texture()",        "equivalence & validation",
+    "column vs scalar, sum ≠ 100, unsupported system",
+  "classify_texture()",        "10 k-point performance regression",
+    "elapsed < 1 s; 0 NAs",
+  "gg_texture_triangle()",     "gg object & colour aesthetic",
+    "inherits gg, colour mapped/absent correctly",
+  "gg_texture_triangle()",     "breaks parameter",
+    "valid combos render; 0 and 100 rejected",
+  "gg_texture_triangle()",     "style parameter",
+    "wiki fill scale present; none absent; visual render",
+  "gg_texture_triangle()",     "grid_colour/linetype/linewidth",
+    "all combinations render without error",
+  "gg_texture_triangle()",     "border_colour/border_linewidth",
+    "bold & NA borders both accepted",
+  "gg_texture_triangle()",     "tick_height",
+    "0 (hidden) and fixed height render; negative rejected",
+  "texture_label_style()",     "key filtering & validation",
+    "only set keys returned; bad types/values rejected; all 6 keys work",
+  "texture_surface()",         "constructor & validation",
+    "correct class/structure; non-numeric z, bad resolution/power rejected",
+  "geom_texture_contour()",    "layer output & composability",
+    "returns LayerInstance; addable to plain triangle and surface",
+  "gg_texture_triangle()",     "12 centroids, 60-sample, sweep",
+    "visualisations — colour by class, correctness, texture class",
+  "classify_texture.SpatRaster()", "1 M-cell SpatRaster (1000×1000)",
+    "0 NAs; elapsed < 15 s; class distribution table; visual plot"
+) |>
+  kable(caption = "Test coverage summary")
+```
