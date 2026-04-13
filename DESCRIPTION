@@ -5,7 +5,7 @@ Version: 1.0.0
 Authors@R:
     person("Einar", "Taakefyrsten", , "einaremil1999@gmail.com",
            role = c("aut", "cre"),
-           comment = c(ORCID = ""))
+           comment = c(ORCID = "0009-0007-5872-4959"))
 Description: A meta-package that installs and attaches the TidySoils
     ecosystem: tidysoiltexture for USDA texture classification and
     ggplot2-based texture triangle plots, and tidysoilwater for Van
