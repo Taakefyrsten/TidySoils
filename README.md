@@ -219,9 +219,9 @@ pak::pak("Taakefyrsten/tidysoilinfiltration")
 ## Standing on the Shoulders of Giants
 
 TidySoils stands on the shoulders of the packages that pioneered soil science in R.
-We are genuinely grateful to their authors — their foundational work made it possible
-to understand what a modern, pipe-compatible soil science workflow should look like,
-and in several cases their function signatures directly informed our own API design.
+We are sincerly grateful to their authors — their foundational work made all of this 
+and close to 2 decades of soil science it possible. In several cases their function 
+signatures directly informed our own API design.
 
 | Legacy package | Authors | What it contributed | TidySoils home |
 |---|---|---|---|
