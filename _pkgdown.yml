@@ -25,6 +25,8 @@ navbar:
           href: https://taakefyrsten.github.io/tidysoiltexture
         - text: "tidysoilwater"
           href: https://taakefyrsten.github.io/tidysoilwater
+        - text: "tidysoilinfiltration"
+          href: https://taakefyrsten.github.io/tidysoilinfiltration
     github:
       icon: fab fa-github
       href: https://github.com/Taakefyrsten/TidySoils

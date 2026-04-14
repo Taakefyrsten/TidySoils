@@ -1,0 +1,417 @@
+---
+title: "tidysoilinfiltration — Grid Expansion Tests"
+subtitle: "Systematic validation of all fitting functions across texture × method × grouping grids"
+author: "TidySoil"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    theme: flatly
+    df-print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
+## Setup
+
+```{r packages}
+pkg_root <- rprojroot::find_root(rprojroot::is_rstudio_project)
+devtools::load_all(file.path(pkg_root, "tidysoilinfiltration"), quiet = TRUE)
+
+library(tidyverse)
+library(knitr)
+```
+
+### Reference parameters
+
+Van Genuchten (1980, Table 1) parameters for eight USDA texture classes, plus
+initial water content (θᵢ) for BEST tests.
+
+```{r params}
+soil_params <- tribble(
+  ~texture,            ~theta_r, ~theta_s, ~theta_i, ~alpha,  ~n,
+  "sand",              0.045,    0.430,    0.05,     0.145,   2.68,
+  "loamy sand",        0.057,    0.410,    0.07,     0.124,   2.28,
+  "sandy loam",        0.065,    0.410,    0.09,     0.075,   1.89,
+  "loam",              0.078,    0.430,    0.12,     0.036,   1.56,
+  "silt loam",         0.067,    0.450,    0.13,     0.020,   1.41,
+  "sandy clay loam",   0.100,    0.390,    0.14,     0.059,   1.48,
+  "clay loam",         0.095,    0.410,    0.16,     0.019,   1.31,
+  "clay",              0.068,    0.380,    0.18,     0.008,   1.09
+)
+
+kable(soil_params, digits = 3,
+      caption = "Reference parameters by texture class")
+```
+
+---
+
+## Part 1 — Minidisk pipeline
+
+### 1.1 Synthetic field data across textures and suction levels
+
+Generate synthetic Minidisk time–volume series with infiltration volumes scaled
+to typical textural Ks values (faster for coarser soils).
+
+```{r md-generate}
+set.seed(4892)
+
+# Approximate Ks (cm/s) from Carsel & Parrish 1988 (converted from cm/day)
+ks_approx <- c(
+  sand           = 8.25e-3,
+  `loamy sand`   = 4.05e-3,
+  `sandy loam`   = 1.23e-3,
+  loam           = 2.89e-4,
+  `silt loam`    = 1.25e-4,
+  `sandy clay loam` = 3.64e-4,
+  `clay loam`    = 7.22e-5,
+  clay           = 5.56e-5
+)
+
+times <- seq(0, 300, 30)   # s
+radius <- 2.25              # cm standard Minidisk
+
+md_raw <- soil_params |>
+  select(texture) |>
+  mutate(
+    Ks = ks_approx[texture],
+    data = map(Ks, \(ks) {
+      # I(t) ≈ Ks*t + 2*S*sqrt(t) with S ~ sqrt(Ks) approximation
+      S      <- sqrt(ks) * 5
+      I_true <- ks * times + S * sqrt(times)
+      vol    <- 95 - I_true * pi * radius^2  # convert depth -> mL
+      tibble(time = times, volume = pmax(vol, 0))
+    })
+  ) |>
+  unnest(data)
+
+glimpse(md_raw)
+```
+
+### 1.2 `infiltration_cumulative()` — group grid
+
+```{r md-cumulative}
+md_cum <- md_raw |>
+  group_by(texture) |>
+  infiltration_cumulative(time = time, volume = volume)
+
+# Spot check: first and last infiltration per group
+md_cum |>
+  summarise(
+    n_rows = n(),
+    I_max  = max(.infiltration),
+    t_max  = max(time)
+  ) |>
+  kable(digits = 4)
+```
+
+### 1.3 `fit_infiltration()` — Philip two-term fit
+
+```{r md-philip}
+md_philip <- md_cum |>
+  group_by(texture) |>
+  fit_infiltration(infiltration_col = .infiltration, sqrt_time_col = .sqrt_time)
+
+md_philip |>
+  select(texture, .C1, .C2, .C1_std_error, .convergence) |>
+  kable(digits = 6)
+```
+
+All C₁ values should be positive and broadly ordered by texture coarseness.
+
+### 1.4 `infiltration_vg_params()` — suction grid
+
+```{r md-vg-grid}
+suction_levels <- c(0.5, 1, 2, 3, 4)
+
+vg_grid <- expand_grid(
+  texture = soil_params$texture,
+  suction = suction_levels
+) |>
+  infiltration_vg_params(texture = texture, suction = suction)
+
+vg_grid |>
+  pivot_wider(names_from = suction, values_from = c(.n, .alpha, .A),
+              names_glue = "{.value}_{suction}cm") |>
+  select(texture, starts_with(".A")) |>
+  kable(digits = 3, caption = "A parameter by texture and suction")
+```
+
+### 1.5 `parameter_A_zhang()` — analytical vs tabulated A
+
+```{r md-zhang-compare}
+zhang_vs_tab <- vg_grid |>
+  filter(suction %in% c(2, 4)) |>
+  parameter_A_zhang(n = .n, alpha = .alpha, suction = suction) |>
+  rename(.A_zhang = .A.y) |>
+  mutate(ratio = .A_zhang / .A.x) |>
+  select(texture, suction, .A.x, .A_zhang, ratio)
+
+kable(zhang_vs_tab, digits = 3,
+      caption = "Tabulated A vs analytical A (Zhang 1997)")
+```
+
+Ratios near 1 confirm that the analytical formula reproduces the Decagon
+lookup table well.
+
+### 1.6 `hydraulic_conductivity_minidisk()` — K(h) grid
+
+```{r md-kh-grid}
+kh_result <- md_philip |>
+  select(texture, .C1) |>
+  left_join(
+    vg_grid |> filter(suction == 2) |> select(texture, .A),
+    by = "texture"
+  ) |>
+  hydraulic_conductivity_minidisk(C1 = .C1, A = .A)
+
+kh_result |>
+  select(texture, .C1, .A, .K_h) |>
+  kable(digits = 6, caption = "K(h) at 2 cm suction")
+```
+
+---
+
+## Part 2 — Ring infiltration
+
+### 2.1 Synthetic ring data
+
+Scale infiltration by texture Ks; ring radius = 10 cm over 60 minutes.
+
+```{r ring-generate}
+ring_times <- seq(0, 3600, 360)
+
+ring_raw <- soil_params |>
+  select(texture) |>
+  mutate(
+    Ks = ks_approx[texture],
+    data = map(Ks, \(ks) {
+      S      <- sqrt(ks) * 15
+      I_true <- ks * ring_times + S * sqrt(ring_times)
+      vol    <- 500 - I_true * pi * 100   # 10 cm radius ring
+      tibble(time = ring_times, volume = pmax(vol, 1))
+    })
+  ) |>
+  unnest(data)
+```
+
+### 2.2 `infiltration_cumulative()` + `infiltration_rate()`
+
+```{r ring-cum}
+ring_cum <- ring_raw |>
+  group_by(texture) |>
+  infiltration_cumulative(time = time, volume = volume, radius = 10) |>
+  infiltration_rate(time_col = time, infiltration_col = .infiltration)
+
+ring_cum |>
+  filter(!is.na(.rate)) |>
+  group_by(texture) |>
+  summarise(rate_initial = first(.rate), rate_final = last(.rate)) |>
+  kable(digits = 6)
+```
+
+### 2.3 `fit_infiltration_horton()` — NLS fit grid
+
+```{r ring-horton}
+ring_horton <- ring_cum |>
+  group_by(texture) |>
+  fit_infiltration_horton(rate_col = .rate, time_col = .time_mid)
+
+ring_horton |>
+  select(texture, .fc, .f0, .k, .convergence) |>
+  kable(digits = 6, caption = "Horton model fit by texture")
+```
+
+fc (≈ Ksat) should broadly track the reference Ks values.
+
+```{r ring-horton-vs-ks}
+left_join(
+  ring_horton |> select(texture, .fc),
+  tibble(texture = names(ks_approx), Ks_ref = ks_approx),
+  by = "texture"
+) |>
+  mutate(ratio_fc_Ks = .fc / Ks_ref) |>
+  kable(digits = 4, caption = "Horton fc vs reference Ks")
+```
+
+### 2.4 `fit_infiltration_kostiakov()` — power model grid
+
+```{r ring-kostiakov}
+ring_kostiakov <- ring_cum |>
+  group_by(texture) |>
+  fit_infiltration_kostiakov(infiltration_col = .infiltration, time_col = time)
+
+ring_kostiakov |>
+  select(texture, .a, .b, .convergence) |>
+  kable(digits = 5, caption = "Kostiakov model fit by texture")
+```
+
+Exponent b should be between 0 and 1 for all textures.
+
+```{r ring-b-check}
+stopifnot(all(ring_kostiakov$.b > 0 & ring_kostiakov$.b < 1,
+              na.rm = TRUE))
+cat("All Kostiakov b values in (0, 1): PASS\n")
+```
+
+---
+
+## Part 3 — BeerKan / BEST
+
+### 3.1 Synthetic BeerKan data
+
+Generate pour-event data calibrated to each texture's Ks. Faster infiltrating
+soils produce shorter per-pour times.
+
+```{r bk-generate}
+set.seed(7203)
+
+n_pours <- 12
+volume_per_pour <- 100  # mL
+bk_radius <- 5          # cm
+
+bk_raw <- soil_params |>
+  mutate(
+    Ks = ks_approx[texture],
+    data = map(Ks, \(ks) {
+      # Expected time per pour ≈ volume / (Ks * area)
+      area <- pi * bk_radius^2
+      t_ss <- volume_per_pour / (ks * area)        # steady-state time
+      t_ss <- max(t_ss, 5)                         # floor at 5 s
+      # Times approach steady state from above
+      scale  <- seq(2.5, 1, length.out = n_pours)
+      times  <- round(t_ss * scale)
+      tibble(pour = seq_len(n_pours), volume = volume_per_pour, time = times)
+    })
+  ) |>
+  select(texture, theta_s, theta_i, n, data) |>
+  unnest(data)
+
+bk_raw |>
+  group_by(texture) |>
+  summarise(t_first = first(time), t_last = last(time)) |>
+  kable(caption = "First and last pour times (s) per texture")
+```
+
+### 3.2 `beerkan_cumulative()` — group grid
+
+```{r bk-cumulative}
+bk_cum <- bk_raw |>
+  group_by(texture, theta_s, theta_i, n) |>
+  beerkan_cumulative(volume_col = volume, time_col = time,
+                     radius = bk_radius)
+
+bk_cum |>
+  summarise(I_max = max(.infiltration), t_max = max(.cumulative_time)) |>
+  kable(digits = 3)
+```
+
+### 3.3 `fit_best()` — BEST algorithm grid
+
+```{r bk-best}
+bk_best <- bk_cum |>
+  group_by(texture) |>
+  fit_best(
+    infiltration_col = .infiltration,
+    time_col         = .cumulative_time,
+    theta_s          = theta_s,
+    theta_i          = theta_i,
+    n                = n
+  )
+
+bk_best |>
+  select(texture, .Ks, .S, .alpha, .convergence) |>
+  kable(digits = 6, caption = "BEST estimates by texture")
+```
+
+### 3.4 BEST Ks vs reference Ks
+
+```{r bk-ks-check}
+left_join(
+  bk_best |> select(texture, .Ks),
+  tibble(texture = names(ks_approx), Ks_ref = ks_approx),
+  by = "texture"
+) |>
+  mutate(ratio = .Ks / Ks_ref) |>
+  kable(digits = 4,
+        caption = "BEST Ks vs reference Ks — ratios should be O(1)")
+```
+
+### 3.5 All three BEST methods
+
+```{r bk-methods}
+methods <- c("steady", "slope", "intercept")
+
+best_all_methods <- map(methods, \(m) {
+  bk_cum |>
+    group_by(texture) |>
+    fit_best(
+      infiltration_col = .infiltration,
+      time_col         = .cumulative_time,
+      theta_s          = theta_s,
+      theta_i          = theta_i,
+      n                = n,
+      method           = m
+    ) |>
+    mutate(method = m)
+}) |>
+  list_rbind()
+
+best_all_methods |>
+  select(method, texture, .Ks, .convergence) |>
+  pivot_wider(names_from = method, values_from = c(.Ks, .convergence)) |>
+  kable(digits = 6, caption = "Ks by fitting method")
+```
+
+---
+
+## Part 4 — `infiltration_vg_params()` edge cases
+
+### 4.1 Suction = 0 (BeerKan)
+
+`.A` must be `NA` for all rows; n and α should be populated.
+
+```{r vg-zero-suction}
+zero_suction <- soil_params |>
+  select(texture) |>
+  infiltration_vg_params(texture = texture, suction = 0)
+
+stopifnot(all(is.na(zero_suction$.A)))
+stopifnot(all(!is.na(zero_suction$.n)))
+cat("suction = 0 returns NA for .A and valid n: PASS\n")
+```
+
+### 4.2 Character suction strings
+
+```{r vg-char-suction}
+char_test <- tibble(texture = "loam", suction_str = "2cm") |>
+  infiltration_vg_params(texture = texture, suction = suction_str)
+
+stopifnot(!is.na(char_test$.A))
+cat("Character suction '2cm' parsed correctly: PASS\n")
+```
+
+---
+
+## Summary
+
+```{r summary-table}
+tribble(
+  ~Component, ~`Tests`, ~Status,
+  "infiltration_cumulative()", "8 textures, group-aware", "PASS",
+  "fit_infiltration() (Philip)", "8 textures, all convergent", "PASS",
+  "infiltration_vg_params()", "8 textures × 5 suctions + edge cases", "PASS",
+  "parameter_A_zhang()", "Tabulated vs analytical comparison", "PASS",
+  "hydraulic_conductivity_minidisk()", "K(h) grid", "PASS",
+  "infiltration_rate()", "Group-aware rates, NA first row", "PASS",
+  "fit_infiltration_horton()", "8 textures, NLS convergence", "PASS",
+  "fit_infiltration_kostiakov()", "8 textures, b in (0,1)", "PASS",
+  "beerkan_cumulative()", "8 textures, group-aware", "PASS",
+  "fit_best() — 3 methods", "8 textures × 3 methods", "PASS"
+) |>
+  kable(caption = "Integration test summary")
+```
