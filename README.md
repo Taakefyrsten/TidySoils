@@ -5,10 +5,11 @@
 [![R CMD check](https://github.com/Taakefyrsten/TidySoils/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Taakefyrsten/TidySoils/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
-**Tidy tools for soil science in R.** The TidySoils ecosystem brings soil
+**Tidy tools for soil science in R.** 
+The TidySoils ecosystem brings soil
 texture classification, water retention modelling, hydraulic conductivity
-analysis, and field infiltration analysis into the tidyverse —
-pipe-compatible, tibble-in/tibble-out, and fast.
+analysis, and field infiltration analysis into modern times —
+tidyverse/pipe-compatible, tibble-in/tibble-out, and blazingly fast.
 
 ---
 
