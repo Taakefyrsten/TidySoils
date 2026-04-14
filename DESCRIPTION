@@ -8,10 +8,11 @@ Authors@R:
            comment = c(ORCID = "0009-0007-5872-4959"))
 Description: A meta-package that installs and attaches the TidySoils
     ecosystem: tidysoiltexture for USDA texture classification and
-    ggplot2-based texture triangle plots, and tidysoilwater for Van
-    Genuchten soil water retention and unsaturated hydraulic conductivity
-    modelling. All packages are pipe-compatible, accept and return tibbles,
-    and use tidy evaluation for column arguments.
+    ggplot2-based texture triangle plots, tidysoilwater for Van Genuchten
+    soil water retention and unsaturated hydraulic conductivity modelling,
+    and tidysoilinfiltration for Minidisk, ring, and BeerKan (BEST)
+    infiltration analysis. All packages are pipe-compatible, accept and
+    return tibbles, and use tidy evaluation for column arguments.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -19,10 +20,12 @@ RoxygenNote: 7.3.3
 Depends:
     R (>= 4.1.0),
     tidysoiltexture (>= 1.0.0),
-    tidysoilwater (>= 1.0.0)
+    tidysoilwater (>= 1.0.0),
+    tidysoilinfiltration (>= 1.1.0)
 Remotes:
     Taakefyrsten/tidysoiltexture,
-    Taakefyrsten/tidysoilwater
+    Taakefyrsten/tidysoilwater,
+    Taakefyrsten/tidysoilinfiltration
 URL: https://taakefyrsten.github.io/TidySoils,
     https://github.com/Taakefyrsten/TidySoils
 BugReports: https://github.com/Taakefyrsten/TidySoils/issues
