@@ -6,8 +6,9 @@
 <!-- badges: end -->
 
 **Tidy tools for soil science in R.** The TidySoils ecosystem brings soil
-texture classification, water retention modelling, and hydraulic conductivity
-analysis into the tidyverse — pipe-compatible, tibble-in/tibble-out, and fast.
+texture classification, water retention modelling, hydraulic conductivity
+analysis, and field infiltration analysis into the tidyverse —
+pipe-compatible, tibble-in/tibble-out, and fast.
 
 ---
 
@@ -74,6 +75,28 @@ df |>
                      alpha = alpha, n = n, h = h)
 ```
 
+### Minidisk infiltration (Zhang 1997)
+
+```r
+# Old approach — infiltrodiscR, manual per-sample workflow
+library(infiltrodiscR)
+vg <- vg_parameters(texture = "Sandy Loam", suction = "2")
+A  <- parameter_A(vg, h = 2)
+fit <- infiltration(data = df_sample, time = "time", volume = "volume")
+K  <- hydraulic_conductivity(fit, A)
+
+# TidySoils — one pipeline, any number of samples
+library(tidysoilinfiltration)
+df |>
+  group_by(sample_id) |>
+  infiltration_cumulative(time = time, volume = volume) |>
+  group_by(sample_id) |>
+  fit_infiltration(infiltration_col = .infiltration, sqrt_time_col = .sqrt_time) |>
+  left_join(meta, by = "sample_id") |>
+  infiltration_vg_params(texture = texture, suction = suction) |>
+  hydraulic_conductivity_minidisk(C1 = .C1, A = .A)
+```
+
 ### Spatial classification (terra raster)
 
 ```r
@@ -125,6 +148,27 @@ pak::pak("Taakefyrsten/tidysoilwater")
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### [tidysoilinfiltration](https://taakefyrsten.github.io/tidysoilinfiltration)
+
+Field infiltration analysis covering three measurement protocols.
+
+* `infiltration_cumulative()` / `infiltration_rate()` — Minidisk & ring
+* `hydraulic_conductivity_minidisk()` — K(h) via Zhang (1997)
+* `fit_infiltration_horton()` / `fit_infiltration_kostiakov()` — ring models
+* `beerkan_cumulative()` + `fit_best()` — BeerKan / BEST algorithm
+
+```r
+pak::pak("Taakefyrsten/tidysoilinfiltration")
+```
+
+</td>
+<td width="50%">
+
+</td>
+</tr>
 </table>
 
 ---
@@ -132,12 +176,13 @@ pak::pak("Taakefyrsten/tidysoilwater")
 ## Installation
 
 ```r
-# Install both packages at once via the meta-package:
+# Install the full ecosystem via the meta-package:
 pak::pak("Taakefyrsten/TidySoils")
 
 # Or install individually:
 pak::pak("Taakefyrsten/tidysoiltexture")
 pak::pak("Taakefyrsten/tidysoilwater")
+pak::pak("Taakefyrsten/tidysoilinfiltration")
 ```
 
 ---
@@ -148,8 +193,8 @@ pak::pak("Taakefyrsten/tidysoilwater")
   terra objects automatically; no separate function to remember.
 * **No external spatial dependencies for core operations** — sf and terra are
   in Suggests, not Imports. The packages work without them.
-* **Base R parallelism** — `fit_swrc(workers = N)` uses
-  `parallel::mclapply()`, a base R function. No future/foreach overhead.
+* **Base R parallelism** — `fit_swrc(workers = N)` and `fit_best(workers = N)`
+  use `parallel::mclapply()`, a base R function. No future/foreach overhead.
 * **IDW not a spatial package** — `texture_surface()` implements inverse
   distance weighting in pure vectorised R.
 
@@ -169,6 +214,7 @@ pak::pak("Taakefyrsten/tidysoilwater")
 ```r
 citation("tidysoiltexture")
 citation("tidysoilwater")
+citation("tidysoilinfiltration")
 ```
 
 ## License
