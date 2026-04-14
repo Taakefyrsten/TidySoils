@@ -20,6 +20,9 @@ Depends:
     R (>= 4.1.0),
     tidysoiltexture (>= 1.0.0),
     tidysoilwater (>= 1.0.0)
+Remotes:
+    Taakefyrsten/tidysoiltexture,
+    Taakefyrsten/tidysoilwater
 URL: https://taakefyrsten.github.io/TidySoils,
     https://github.com/Taakefyrsten/TidySoils
 BugReports: https://github.com/Taakefyrsten/TidySoils/issues
