@@ -14,6 +14,7 @@ Description: A meta-package that installs and attaches the TidySoils
     infiltration analysis. All packages are pipe-compatible, accept and
     return tibbles, and use tidy evaluation for column arguments.
 License: MIT + file LICENSE
+Date: 2026-04-14
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
