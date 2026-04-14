@@ -81,21 +81,33 @@ df |>
 ```r
 # Old approach — infiltrodiscR, manual per-sample workflow
 library(infiltrodiscR)
-vg <- vg_parameters(texture = "Sandy Loam", suction = "2")
-A  <- parameter_A(vg, h = 2)
+vg  <- vg_parameters(texture = "Sandy Loam", suction = "2")
+A   <- parameter_A(vg, h = 2)
 fit <- infiltration(data = df_sample, time = "time", volume = "volume")
-K  <- hydraulic_conductivity(fit, A)
+K   <- hydraulic_conductivity(fit, A)
 
-# TidySoils — one pipeline, any number of samples
+# TidySoils — four steps, any number of samples, one group_by
 library(tidysoilinfiltration)
 df |>
   group_by(sample_id) |>
   infiltration_cumulative(time = time, volume = volume) |>
-  group_by(sample_id) |>
-  fit_infiltration(infiltration_col = .infiltration, sqrt_time_col = .sqrt_time) |>
+  fit_infiltration(.infiltration, .sqrt_time) |>
   left_join(meta, by = "sample_id") |>
-  infiltration_vg_params(texture = texture, suction = suction) |>
-  hydraulic_conductivity_minidisk(C1 = .C1, A = .A)
+  minidisk_conductivity(texture = texture, suction = suction)
+```
+
+### Ponded ring infiltration (Horton Kfs)
+
+```r
+# Old approach — manual rate calculation, then nls() by hand
+rates <- diff(cumulative) / diff(times)
+fit   <- nls(rate ~ fc + (f0 - fc) * exp(-k * t), ...)
+Kfs   <- coef(fit)[["fc"]]
+
+# TidySoils — raw readings to Kfs in one step
+df |>
+  group_by(site) |>
+  ring_conductivity(time = time, volume = volume, radius = 10)
 ```
 
 ### Spatial classification (terra raster)
@@ -156,9 +168,9 @@ pak::pak("Taakefyrsten/tidysoilwater")
 
 Field infiltration analysis covering three measurement protocols.
 
-* `infiltration_cumulative()` / `infiltration_rate()` — Minidisk & ring
-* `hydraulic_conductivity_minidisk()` — K(h) via Zhang (1997)
-* `fit_infiltration_horton()` / `fit_infiltration_kostiakov()` — ring models
+* `minidisk_conductivity()` — raw readings → K(h) in four steps (Zhang 1997)
+* `ring_conductivity()` — raw readings → Kfs via Horton model in one step
+* `fit_infiltration()` / `fit_infiltration_kostiakov()` — Philip & Kostiakov fits
 * `beerkan_cumulative()` + `fit_best()` — BeerKan / BEST algorithm
 
 ```r
