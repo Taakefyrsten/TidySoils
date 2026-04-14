@@ -36,7 +36,7 @@ ground up around three principles:
 |------|--------------------------|-----------|---------|
 | Classify 10 000 soil samples | soiltexR / aqp row loop ~2.7 s | `classify_texture()` 0.011 s | **~250×** |
 | Classify 1 M raster cells | R loop over terra values ~60+ s | `classify_texture()` < 5 s | **>12×** |
-| SWRC for 1 M rows | manual vectorisation (baseline) | `swrc_van_genuchten()` < 20 ms | reference |
+| SWRC for 1 M rows | `soilwater::swc()` vectorized ~21 ms | `swrc_van_genuchten()` ~29 ms | ~1.4× overhead (tidy-eval cost) |
 | K(h) for 1 M rows | soilwater equivalent ~120 ms | `hydraulic_conductivity()` < 40 ms | **~3×** |
 | Fit 500 pedons (4 cores) | `lapply()` sequential | `fit_swrc(workers=4)` parallel | **~4×** |
 
