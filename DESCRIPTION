@@ -1,7 +1,7 @@
 Package: TidySoils
 Type: Package
 Title: Tidy Tools for Soil Science
-Version: 1.0.0
+Version: 1.1.0
 Authors@R:
     person("Einar", "Taakefyrsten", , "einaremil1999@gmail.com",
            role = c("aut", "cre"),
@@ -20,7 +20,7 @@ RoxygenNote: 7.3.3
 Depends:
     R (>= 4.1.0),
     tidysoiltexture (>= 1.0.0),
-    tidysoilwater (>= 1.0.0),
+    tidysoilwater (>= 1.2.0),
     tidysoilinfiltration (>= 1.1.0)
 Remotes:
     Taakefyrsten/tidysoiltexture,

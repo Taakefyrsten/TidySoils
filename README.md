@@ -152,8 +152,11 @@ pak::pak("Taakefyrsten/tidysoiltexture")
 Van Genuchten soil water retention and Mualem-Van Genuchten K(h).
 
 * `swrc_van_genuchten()` — θ(h) for any parameter × head combination
-* `hydraulic_conductivity()` — K(h) at any saturation state
-* `fit_swrc()` — NLS fitting, grouped, with optional parallel workers
+* `hydraulic_conductivity()` — K(h) at any saturation state (exposed `tau` parameter)
+* `soil_water_capacity()` / `soil_water_diffusivity()` / `saturation_index()` — derived quantities
+* `fit_swrc()` — NLS fitting, grouped, with constraints and parallel workers
+* `fit_swrc_hcc()` — joint simultaneous SWRC + K(h) fitting *(new in v1.2.0)*
+* `confint.fit_swrc()` — profile-likelihood confidence intervals *(new in v1.2.0)*
 
 ```r
 pak::pak("Taakefyrsten/tidysoilwater")
@@ -213,12 +216,83 @@ pak::pak("Taakefyrsten/tidysoilinfiltration")
 
 ---
 
+## Standing on the Shoulders of Giants
+
+TidySoils stands on the shoulders of the packages that pioneered soil science in R.
+We are genuinely grateful to their authors — their foundational work made it possible
+to understand what a modern, pipe-compatible soil science workflow should look like,
+and in several cases their function signatures directly informed our own API design.
+
+| Legacy package | Authors | What it contributed | TidySoils home |
+|---|---|---|---|
+| [`soilwater`](https://CRAN.R-project.org/package=soilwater) | Cordano, Zottele & Andreis | Van Genuchten SWRC, Mualem K(h), water capacity and diffusivity | `tidysoilwater` |
+| [`soilhypfit`](https://CRAN.R-project.org/package=soilhypfit) | Papritz & Lehmann | Simultaneous SWRC + K(h) fitting; the τ (tortuosity) parameter | `tidysoilwater` |
+| [`soiltexture`](https://CRAN.R-project.org/package=soiltexture) | Moeys | The Soil Texture Wizard — ternary plots and 15+ classification systems | `tidysoiltexture` |
+| [`soiltexR`](https://CRAN.R-project.org/package=soiltexR) | Grunwald | Lightweight USDA classification with `getTexture()` | `tidysoiltexture` |
+| [`aqp`](https://CRAN.R-project.org/package=aqp) | Beaudette et al. | Algorithms for quantitative pedology, incl. `textureTriangle()` | `tidysoiltexture` |
+| [`infiltrodiscR`](https://CRAN.R-project.org/package=infiltrodiscR) | Salazar Zarzosa et al. | Minidisk infiltrometer workflow (Philip fit, VG lookup, K(h)) | `tidysoilinfiltration` |
+
+### Functionality coverage
+
+The tables below map key functions from legacy packages to their TidySoils
+equivalents, so you can verify that no functionality has been lost in the transition.
+
+**Soil water (soilwater + soilhypfit → tidysoilwater)**
+
+| Legacy call | TidySoils equivalent | Since |
+|---|---|---|
+| `soilwater::swc(alpha, theta_r, theta_s, n, h)` | `swrc_van_genuchten(df, alpha=, n=, h=, ...)` | v1.0.0 |
+| `soilwater::swc(...)` K(h) mode | `hydraulic_conductivity(df, ...)` | v1.0.0 |
+| `soilwater::cap(...)` | `soil_water_capacity(df, ...)` | v1.1.0 |
+| `soilwater::diffusivity(...)` | `soil_water_diffusivity(df, ...)` | v1.1.0 |
+| `soilwater::swc(..., saturation_index = TRUE)` | `saturation_index(df, ...)` | v1.1.0 |
+| `soilhypfit::hc_model(tau = ...)` | `hydraulic_conductivity(df, tau = ...)` | v1.1.0 |
+| *(no equivalent)* | `fit_swrc()` — grouped NLS with constraints and parallel workers | v1.0.0 |
+| *(no equivalent)* | `fit_swrc_hcc()` — joint SWRC + K(h) fit | v1.2.0 |
+| *(no equivalent)* | `confint.fit_swrc()` — profile-likelihood confidence intervals | v1.2.0 |
+
+> **Note:** `soilwater::watervolume()` — which integrates the SWRC vertically over a
+> soil profile to compute total stored water — is outside tidysoilwater's current scope
+> (hillslope/water balance domain rather than pedon-level analysis).
+
+**Soil texture (soiltexture + soiltexR + aqp → tidysoiltexture)**
+
+| Legacy call | TidySoils equivalent | Since |
+|---|---|---|
+| `soiltexR::getTexture(sand, silt, clay)` | `classify_texture(df, sand, silt, clay)` | v1.0.0 |
+| `soiltexture::TT.plot(...)` | `gg_texture_triangle(df, ...)` | v1.0.0 |
+| `aqp::textureTriangle(...)` | `gg_texture_triangle(df, ...)` | v1.0.0 |
+| USDA 12-class system | `classify_texture()` — vectorised, < 0.015 s / 10 000 samples | v1.0.0 |
+| sf / SpatRaster S3 dispatch | `classify_texture(sf_or_raster, ...)` | v1.0.0 |
+| FAO classification | *(planned — see [roadmap issues](https://github.com/Taakefyrsten/TidySoils/issues))* | — |
+| British / USDA-UK system | *(planned — see [roadmap issues](https://github.com/Taakefyrsten/TidySoils/issues))* | — |
+
+> **Note:** `soiltexture` supports 15+ international classification systems.
+> tidysoiltexture currently covers the USDA system only. Expanding to FAO and
+> British standards is the most important remaining gap and is actively tracked
+> in the issue tracker.
+
+**Infiltration (infiltrodiscR → tidysoilinfiltration)**
+
+| Legacy call | TidySoils equivalent | Since |
+|---|---|---|
+| `infiltrodiscR::infiltration(df, time, volume)` | `infiltration_cumulative(df, time, volume)` | v1.0.0 |
+| `infiltrodiscR::vg_par()` | `infiltration_vg_params(df, texture, suction)` | v1.0.0 |
+| `infiltrodiscR::parameter_A(vg, h)` | `parameter_A_zhang(df, ...)` | v1.0.0 |
+| `infiltrodiscR::hydraulic_conductivity(fit, A)` | `hydraulic_conductivity_minidisk(df, C1, A)` | v1.0.0 |
+| Full Minidisk pipeline (manual `nest()` + `map()`) | `minidisk_conductivity(df, texture, suction)` | v1.1.0 |
+| *(no equivalent)* | `fit_infiltration_horton()` — Horton exponential decay | v1.0.0 |
+| *(no equivalent)* | `fit_infiltration_kostiakov()` — Kostiakov power model | v1.0.0 |
+| *(no equivalent)* | `beerkan_cumulative()` + `fit_best()` — BeerKan / BEST algorithm | v1.0.0 |
+| *(no equivalent)* | `ring_conductivity()` — ponded ring → Kfs in one step | v1.1.0 |
+
+---
+
 ## Roadmap
 
-* Bayesian parameter fitting for clay soils (brms / Stan)
-* FAO and British soil texture classification systems
-* Additional pedotransfer function families (Rawls & Brakensiek, Rosetta 3)
-* Shiny explorer app for interactive texture and retention analysis
+Feature roadmap items are tracked as
+[enhancement issues](https://github.com/Taakefyrsten/TidySoils/issues?q=label%3Aenhancement)
+on GitHub. See the issue tracker for status and discussion.
 
 ---
 
