@@ -1,0 +1,99 @@
+url: https://taakefyrsten.github.io/tidysoilptf
+
+template:
+  bootstrap: 5
+  bootswatch: flatly
+
+home:
+  title: "tidysoilptf — Pedotransfer functions for soil hydraulic properties"
+  description: >
+    Tidy pedotransfer functions for estimating soil hydraulic properties from
+    basic soil data. Implements major parametric PTFs (Wösten 1999, Saxton &
+    Rawls 2006, Vereecken 1989, Weynants 2009, Cosby 1984) with automatic
+    out-of-domain warnings, physical plausibility checks, and parameter model
+    converters. Part of the TidySoils ecosystem.
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [ecosystem, github]
+  components:
+    intro:
+      text: "Get started"
+      href: articles/pedotransfer-functions.html
+    ecosystem:
+      text: "TidySoils"
+      menu:
+        - text: "TidySoils ecosystem"
+          href: https://taakefyrsten.github.io/TidySoils
+        - text: "---"
+        - text: "tidysoiltexture"
+          href: https://taakefyrsten.github.io/tidysoiltexture
+        - text: "tidysoilwater"
+          href: https://taakefyrsten.github.io/tidysoilwater
+        - text: "tidysoilinfiltration"
+          href: https://taakefyrsten.github.io/tidysoilinfiltration
+        - text: "tidysoilptf"
+          href: https://taakefyrsten.github.io/tidysoilptf
+    github:
+      icon: fab fa-github
+      href: https://github.com/Taakefyrsten/tidysoilptf
+      aria-label: GitHub
+
+reference:
+  - title: "Parametric PTFs — VGM output"
+    desc: "Closed-form regression PTFs returning Van Genuchten–Mualem parameters"
+    contents:
+      - ptf_wosten
+      - ptf_wosten_class
+      - ptf_vereecken
+      - ptf_weynants
+  - title: "Parametric PTFs — non-VGM output"
+    desc: "PTFs returning Campbell/Clapp-Hornberger or tension–moisture curve parameters"
+    contents:
+      - ptf_saxton_rawls
+      - ptf_cosby
+      - ptf_rawls_brakensiek
+      - ptf_rawls_1982
+  - title: "Machine-learning PTFs"
+    desc: "Random forest and neural network PTFs with built-in uncertainty"
+    contents:
+      - ptf_euptf2
+  - title: "Supporting functions"
+    desc: "Bulk density estimation, parameter conversion, and plausibility checks"
+    contents:
+      - ptf_bulk_density
+      - convert_params
+      - check_shp_plausibility
+  - title: "Metadata"
+    desc: "PTF training-domain information"
+    contents:
+      - ptf_info
+
+articles:
+  - title: "Getting started"
+    navbar: "Getting started"
+    contents:
+      - pedotransfer-functions
+  - title: "PTF selection"
+    navbar: "PTF selection"
+    contents:
+      - choosing-a-ptf
+      - domain-warnings
+  - title: "Workflows"
+    navbar: "Workflows"
+    contents:
+      - multi-ptf-comparison
+      - uncertainty-propagation
+
+repo:
+  url:
+    home: https://github.com/Taakefyrsten/tidysoilptf
+    source: https://github.com/Taakefyrsten/tidysoilptf/blob/main/
+    issue: https://github.com/Taakefyrsten/tidysoilptf/issues
+    user: https://github.com/
+
+news:
+  releases:
+    - text: "tidysoilptf 0.1.0"
+      href: news/index.html
