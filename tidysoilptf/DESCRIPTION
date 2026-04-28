@@ -1,0 +1,40 @@
+Package: tidysoilptf
+Title: Tidy Pedotransfer Functions for Soil Hydraulic Property Estimation
+Version: 0.1.0
+Authors@R:
+    person("Einar Emil", "Låker", , "einaremil1999@gmail.com",
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0007-5872-4959"))
+Description: A tidy collection of pedotransfer functions (PTFs) for estimating
+    soil hydraulic properties from basic soil data. Provides pipe-compatible
+    functions returning tibbles with tidy evaluation support. Implements major
+    parametric PTFs (Wösten 1999, Saxton & Rawls 2006, Vereecken 1989,
+    Weynants 2009, Cosby 1984, Rawls & Brakensiek 1985) alongside bulk density
+    estimators, parameter model converters (Campbell/Brooks-Corey to VGM), and
+    physical plausibility checks. Every PTF stores training-domain metadata and
+    automatically warns when inputs fall outside the PTF's calibration range.
+License: MIT + file LICENSE
+Date: 2026-04-24
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1.0)
+Imports:
+    cli,
+    dplyr,
+    rlang,
+    tibble
+Suggests:
+    euptf2,
+    ggplot2,
+    knitr,
+    pkgdown,
+    rmarkdown,
+    testthat (>= 3.0.0),
+    tidysoilwater
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+URL: https://taakefyrsten.github.io/tidysoilptf,
+    https://github.com/Taakefyrsten/tidysoilptf
+BugReports: https://github.com/Taakefyrsten/tidysoilptf/issues
